@@ -1,4 +1,4 @@
-# Flutter
+# BlueChat
 
 A modern Flutter-based mobile application utilizing the latest mobile development technologies and tools for building responsive cross-platform applications.
 
@@ -8,6 +8,7 @@ A modern Flutter-based mobile application utilizing the latest mobile developmen
 - Dart SDK
 - Android Studio / VS Code with Flutter extensions
 - Android SDK / Xcode (for iOS development)
+- GitHub (for source control)
 
 ## 🛠️ Installation
 
@@ -105,8 +106,8 @@ flutter build ios --release
 ```
 
 ## 🙏 Acknowledgments
-- Built with [Rocket.new](https://rocket.new)
+- The Supabase team
 - Powered by [Flutter](https://flutter.dev) & [Dart](https://dart.dev)
 - Styled with Material Design
 
-Built with ❤️ in Uganda!
+Built with 💙 from Uganda!

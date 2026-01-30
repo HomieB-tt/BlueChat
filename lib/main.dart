@@ -29,7 +29,7 @@ void main() async {
     return SizedBox.shrink();
   };
 
-  // 🚨 CRITICAL: Device orientation lock - DO NOT REMOVE
+  // 🚨 CRITICAL: Device orientation lock - NOT TO BE REMOVED
   Future.wait([
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
   ]).then((value) {
