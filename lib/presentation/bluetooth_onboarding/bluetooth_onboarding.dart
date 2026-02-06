@@ -22,7 +22,6 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
   final PageController _pageController = PageController();
   int _currentPage = 0;
   late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
   bool _isLoading = false;
 
   final List<Map<String, dynamic>> _onboardingData = [
@@ -111,9 +110,6 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
-    );
     _animationController.forward();
   }
 
@@ -177,6 +173,7 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
               onPressed: () async {
                 // Mark onboarding as completed even when skipping
                 await StorageService.setOnboardingCompleted(true);
+                if (!context.mounted) return;
                 Navigator.of(context).pop();
                 Navigator.of(
                   context,
@@ -202,17 +199,6 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
         context,
         rootNavigator: true,
       ).pushReplacementNamed('/splash-screen');
-    }
-  }
-
-  Future<void> _completeOnboarding() async {
-    await StorageService.setOnboardingCompleted(true);
-
-    if (mounted) {
-      Navigator.of(
-        context,
-        rootNavigator: true,
-      ).pushReplacementNamed('/home-screen');
     }
   }
 

@@ -77,16 +77,16 @@ class _SplashScreenState extends State<SplashScreen>
 
     // Check if user has completed onboarding
     final bool hasCompletedOnboarding = StorageService.getOnboardingCompleted();
-    final bool hasGrantedPermissions = true; // Mock: Check actual permissions
 
-    String nextRoute;
-    if (!hasGrantedPermissions) {
-      nextRoute = '/permission-request';
-    } else if (!hasCompletedOnboarding) {
-      nextRoute = '/bluetooth-onboarding';
-    } else {
-      nextRoute = '/home-screen';
-    }
+    // TODO: Implement actual permission checking when ready
+    // final bool hasGrantedPermissions = await _checkPermissions();
+    // if (!hasGrantedPermissions) {
+    //   nextRoute = '/permission-request';
+    // }
+
+    final String nextRoute = hasCompletedOnboarding
+        ? '/home-screen'
+        : '/bluetooth-onboarding';
 
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {

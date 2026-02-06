@@ -114,10 +114,6 @@ class _PermissionRequestState extends State<PermissionRequest> {
     ).pushReplacementNamed('/device-discovery');
   }
 
-  void _navigateToNextScreen() {
-    Navigator.of(context).pushReplacementNamed('/home-screen');
-  }
-
   /// Show dialog when permissions are denied
   void _showPermissionDeniedDialog() {
     final theme = Theme.of(context);

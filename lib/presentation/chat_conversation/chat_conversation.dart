@@ -126,15 +126,6 @@ class _ChatConversationState extends State<ChatConversation> {
     }
   }
 
-  void _toggleConnection() {
-    setState(() {
-      _isConnected = !_isConnected;
-      if (!_isConnected) {
-        _isReconnecting = false;
-      }
-    });
-  }
-
   void _retryConnection() {
     setState(() {
       _isReconnecting = true;
