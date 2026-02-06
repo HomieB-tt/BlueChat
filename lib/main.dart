@@ -37,6 +37,34 @@ void main() async {
   });
 }
 
+/// InheritedWidget to provide theme notifier access throughout the widget tree
+class ThemeNotifier extends InheritedNotifier<ValueNotifier<ThemeMode>> {
+  const ThemeNotifier({
+    super.key,
+    required ValueNotifier<ThemeMode> notifier,
+    required super.child,
+  }) : super(notifier: notifier);
+
+  static ValueNotifier<ThemeMode> of(BuildContext context) {
+    final ThemeNotifier? result =
+        context.dependOnInheritedWidgetOfExactType<ThemeNotifier>();
+    assert(result != null, 'No ThemeNotifier found in context');
+    return result!.notifier!;
+  }
+
+  /// Update theme mode and persist to storage
+  static void updateTheme(BuildContext context, ThemeMode mode) {
+    final notifier = of(context);
+    notifier.value = mode;
+    final modeString = mode == ThemeMode.dark
+        ? 'dark'
+        : mode == ThemeMode.system
+            ? 'system'
+            : 'light';
+    StorageService.setThemeMode(modeString);
+  }
+}
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -45,7 +73,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late ThemeMode _themeMode;
+  late ValueNotifier<ThemeMode> _themeModeNotifier;
 
   @override
   void initState() {
@@ -55,51 +83,52 @@ class _MyAppState extends State<MyApp> {
 
   void _loadThemeMode() {
     final savedMode = StorageService.getThemeMode();
-    setState(() {
-      _themeMode = savedMode == 'dark'
-          ? ThemeMode.dark
-          : savedMode == 'system'
-          ? ThemeMode.system
-          : ThemeMode.light;
-    });
+    final themeMode = savedMode == 'dark'
+        ? ThemeMode.dark
+        : savedMode == 'system'
+            ? ThemeMode.system
+            : ThemeMode.light;
+    _themeModeNotifier = ValueNotifier<ThemeMode>(themeMode);
   }
 
-  void updateThemeMode(ThemeMode mode) {
-    setState(() {
-      _themeMode = mode;
-    });
-    final modeString = mode == ThemeMode.dark
-        ? 'dark'
-        : mode == ThemeMode.system
-        ? 'system'
-        : 'light';
-    StorageService.setThemeMode(modeString);
+  @override
+  void dispose() {
+    _themeModeNotifier.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Sizer(
-      builder: (context, orientation, screenType) {
-        return MaterialApp(
-          title: 'bluechat',
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: _themeMode,
-          // 🚨 CRITICAL: NEVER REMOVE OR MODIFY
-          builder: (context, child) {
-            return MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(1.0)),
-              child: child!,
-            );
-          },
-          // 🚨 END CRITICAL SECTION
-          debugShowCheckedModeBanner: false,
-          routes: AppRoutes.routes,
-          initialRoute: AppRoutes.initial,
-        );
-      },
+    return ThemeNotifier(
+      notifier: _themeModeNotifier,
+      child: ValueListenableBuilder<ThemeMode>(
+        valueListenable: _themeModeNotifier,
+        builder: (context, themeMode, child) {
+          return Sizer(
+            builder: (context, orientation, screenType) {
+              return MaterialApp(
+                title: 'bluechat',
+                theme: AppTheme.lightTheme,
+                darkTheme: AppTheme.darkTheme,
+                themeMode: themeMode,
+                // 🚨 CRITICAL: NEVER REMOVE OR MODIFY
+                builder: (context, child) {
+                  return MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(textScaler: TextScaler.linear(1.0)),
+                    child: child!,
+                  );
+                },
+                // 🚨 END CRITICAL SECTION
+                debugShowCheckedModeBanner: false,
+                routes: AppRoutes.routes,
+                initialRoute: AppRoutes.initial,
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

@@ -5,6 +5,7 @@ import './widgets/action_button_widget.dart';
 import './widgets/profile_header_widget.dart';
 import './widgets/settings_section_widget.dart';
 import '../../services/storage_service.dart';
+import '../../main.dart';
 
 class Settings extends StatefulWidget {
   const Settings({super.key});
@@ -292,49 +293,70 @@ class _SettingsState extends State<Settings> {
   void _showThemeDialog() {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Select Theme'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<String>(
-                title: const Text('Light'),
-                value: 'light',
+          content: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return RadioGroup<String>(
                 groupValue: _themeMode,
                 onChanged: (value) {
+                  if (value == null) return;
+                  setDialogState(() {});
                   setState(() {
-                    _themeMode = value!;
+                    _themeMode = value;
                   });
-                  StorageService.setThemeMode(value!);
-                  Navigator.pop(context);
+                  final themeMode = value == 'dark'
+                      ? ThemeMode.dark
+                      : value == 'system'
+                          ? ThemeMode.system
+                          : ThemeMode.light;
+                  ThemeNotifier.updateTheme(this.context, themeMode);
+                  Navigator.pop(dialogContext);
                 },
-              ),
-              RadioListTile<String>(
-                title: const Text('Dark'),
-                value: 'dark',
-                groupValue: _themeMode,
-                onChanged: (value) {
-                  setState(() {
-                    _themeMode = value!;
-                  });
-                  StorageService.setThemeMode(value!);
-                  Navigator.pop(context);
-                },
-              ),
-              RadioListTile<String>(
-                title: const Text('System'),
-                value: 'system',
-                groupValue: _themeMode,
-                onChanged: (value) {
-                  setState(() {
-                    _themeMode = value!;
-                  });
-                  StorageService.setThemeMode(value!);
-                  Navigator.pop(context);
-                },
-              ),
-            ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: const Text('Light'),
+                      leading: Radio<String>(value: 'light'),
+                      onTap: () {
+                        setDialogState(() {});
+                        setState(() {
+                          _themeMode = 'light';
+                        });
+                        ThemeNotifier.updateTheme(this.context, ThemeMode.light);
+                        Navigator.pop(dialogContext);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Dark'),
+                      leading: Radio<String>(value: 'dark'),
+                      onTap: () {
+                        setDialogState(() {});
+                        setState(() {
+                          _themeMode = 'dark';
+                        });
+                        ThemeNotifier.updateTheme(this.context, ThemeMode.dark);
+                        Navigator.pop(dialogContext);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('System'),
+                      leading: Radio<String>(value: 'system'),
+                      onTap: () {
+                        setDialogState(() {});
+                        setState(() {
+                          _themeMode = 'system';
+                        });
+                        ThemeNotifier.updateTheme(this.context, ThemeMode.system);
+                        Navigator.pop(dialogContext);
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         );
       },
@@ -352,30 +374,46 @@ class _SettingsState extends State<Settings> {
     ];
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Select Language'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: languages.length,
-              itemBuilder: (context, index) {
-                final language = languages[index];
-                return RadioListTile<String>(
-                  title: Text(language),
-                  value: language,
+          content: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return SizedBox(
+                width: double.maxFinite,
+                child: RadioGroup<String>(
                   groupValue: _language,
                   onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() {});
                     setState(() {
-                      _language = value!;
+                      _language = value;
                     });
-                    StorageService.setLanguage(value!);
-                    Navigator.pop(context);
+                    StorageService.setLanguage(value);
+                    Navigator.pop(dialogContext);
                   },
-                );
-              },
-            ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: languages.length,
+                    itemBuilder: (context, index) {
+                      final language = languages[index];
+                      return ListTile(
+                        title: Text(language),
+                        leading: Radio<String>(value: language),
+                        onTap: () {
+                          setDialogState(() {});
+                          setState(() {
+                            _language = language;
+                          });
+                          StorageService.setLanguage(language);
+                          Navigator.pop(dialogContext);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         );
       },
@@ -508,31 +546,47 @@ class _SettingsState extends State<Settings> {
   void _showRetentionDialog() {
     showDialog(
       context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
+      builder: (dialogContext) {
         final options = ['7 days', '30 days', '90 days', 'Forever'];
 
         return AlertDialog(
           title: Text('Data Retention Period'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.map((option) {
-              return RadioListTile<String>(
-                title: Text(option),
-                value: option,
+          content: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return RadioGroup<String>(
                 groupValue: _dataRetention,
                 onChanged: (value) {
+                  if (value == null) return;
+                  setDialogState(() {});
                   setState(() {
-                    _dataRetention = value!;
+                    _dataRetention = value;
                   });
-                  Navigator.pop(context);
+                  StorageService.setDataRetention(value);
+                  Navigator.pop(dialogContext);
                 },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: options.map((option) {
+                    return ListTile(
+                      title: Text(option),
+                      leading: Radio<String>(value: option),
+                      onTap: () {
+                        setDialogState(() {});
+                        setState(() {
+                          _dataRetention = option;
+                        });
+                        StorageService.setDataRetention(option);
+                        Navigator.pop(dialogContext);
+                      },
+                    );
+                  }).toList(),
+                ),
               );
-            }).toList(),
+            },
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: Text('Cancel'),
             ),
           ],
@@ -649,30 +703,4 @@ class _SettingsState extends State<Settings> {
     );
   }
 
-  void _navigateToPrivacyPolicy() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening Privacy Policy...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _navigateToTerms() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening Terms of Service...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _contactSupport() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening support contact...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
 }
