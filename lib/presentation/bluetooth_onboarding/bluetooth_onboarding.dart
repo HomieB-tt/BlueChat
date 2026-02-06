@@ -140,10 +140,11 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
       setState(() {
         _isLoading = false;
       });
+      // Navigate to permission request screen to grant necessary permissions
       Navigator.of(
         context,
         rootNavigator: true,
-      ).pushReplacementNamed('/home-screen');
+      ).pushReplacementNamed('/permission-request');
     }
   }
 
@@ -175,10 +176,11 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
                 await StorageService.setOnboardingCompleted(true);
                 if (!context.mounted) return;
                 Navigator.of(context).pop();
+                // Navigate to permission request screen even when skipping
                 Navigator.of(
                   context,
                   rootNavigator: true,
-                ).pushReplacementNamed('/home-screen');
+                ).pushReplacementNamed('/permission-request');
               },
               child: const Text('Continue Anyway'),
             ),

@@ -18,6 +18,11 @@ dependencies:
   shared_preferences: ^2.2.2 # Required for local data storage
   web: ^1.1.1
 
+  # Supabase Integration
+  supabase_flutter: ^2.3.0
+  supabase: ^2.3.0
+  # End Supabase Integration
+
   # Feature dependencies - safe to modify
   cached_network_image: ^3.3.1
   connectivity_plus: ^6.1.4
