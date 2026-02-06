@@ -3,6 +3,7 @@ import 'package:sizer/sizer.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../../core/app_export.dart';
+import '../../services/storage_service.dart';
 import '../../widgets/custom_icon_widget.dart';
 import './widgets/benefit_card_widget.dart';
 import './widgets/onboarding_page_widget.dart';
@@ -136,6 +137,9 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
 
     await Future.delayed(const Duration(milliseconds: 1500));
 
+    // Mark onboarding as completed
+    await StorageService.setOnboardingCompleted(true);
+
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -143,7 +147,7 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
       Navigator.of(
         context,
         rootNavigator: true,
-      ).pushReplacementNamed('/device-discovery');
+      ).pushReplacementNamed('/home-screen');
     }
   }
 
@@ -170,12 +174,14 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
               ),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+                // Mark onboarding as completed even when skipping
+                await StorageService.setOnboardingCompleted(true);
                 Navigator.of(context).pop();
                 Navigator.of(
                   context,
                   rootNavigator: true,
-                ).pushReplacementNamed('/device-discovery');
+                ).pushReplacementNamed('/home-screen');
               },
               child: const Text('Continue Anyway'),
             ),
@@ -199,8 +205,15 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
     }
   }
 
-  void _completeOnboarding() {
-    Navigator.of(context).pushReplacementNamed('/home-screen');
+  Future<void> _completeOnboarding() async {
+    await StorageService.setOnboardingCompleted(true);
+
+    if (mounted) {
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).pushReplacementNamed('/home-screen');
+    }
   }
 
   @override

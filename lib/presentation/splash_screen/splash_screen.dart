@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
+import '../../services/storage_service.dart';
 import '../../widgets/custom_icon_widget.dart';
 
 /// Splash Screen - Branded launch experience with Bluetooth initialization
@@ -74,20 +75,17 @@ class _SplashScreenState extends State<SplashScreen>
   void _navigateToNextScreen() {
     if (!mounted) return;
 
-    // Simulate different user states for navigation
+    // Check if user has completed onboarding
+    final bool hasCompletedOnboarding = StorageService.getOnboardingCompleted();
     final bool hasGrantedPermissions = true; // Mock: Check actual permissions
-    final bool hasPairedDevices = false; // Mock: Check for paired devices
-    final bool isFirstTime = true; // Mock: Check if first-time user
 
     String nextRoute;
     if (!hasGrantedPermissions) {
       nextRoute = '/permission-request';
-    } else if (isFirstTime) {
+    } else if (!hasCompletedOnboarding) {
       nextRoute = '/bluetooth-onboarding';
-    } else if (hasPairedDevices) {
-      nextRoute = '/device-discovery';
     } else {
-      nextRoute = '/device-discovery';
+      nextRoute = '/home-screen';
     }
 
     Future.delayed(const Duration(milliseconds: 500), () {

@@ -17,6 +17,7 @@ class StorageService {
   static const String _keyDataRetention = 'data_retention';
   static const String _keyConversations = 'conversations';
   static const String _keyDevices = 'devices';
+  static const String _keyOnboardingCompleted = 'onboarding_completed';
 
   static SharedPreferences? _prefs;
 
@@ -183,6 +184,16 @@ class StorageService {
     } catch (e) {
       return [];
     }
+  }
+
+  /// Get onboarding completed status
+  static bool getOnboardingCompleted() {
+    return _prefs?.getBool(_keyOnboardingCompleted) ?? false;
+  }
+
+  /// Set onboarding completed status
+  static Future<void> setOnboardingCompleted(bool completed) async {
+    await _prefs?.setBool(_keyOnboardingCompleted, completed);
   }
 
   /// Clear all stored data
