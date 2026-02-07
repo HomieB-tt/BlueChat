@@ -28,3 +28,16 @@ class SupabaseBuckets {
   /// Chat attachments bucket
   static const String attachments = 'attachments';
 }
+
+/// BLE Constants for Bluetooth device discovery
+class BLEConstants {
+  // BlueChat service UUID for device discovery and communication
+  static const String serviceUuid = '0000FEED-0000-1000-8000-00805F9B34FB';
+
+  // Characteristic UUIDs
+  static const String messageCharacteristic = '0000FEED-0000-1000-8000-00805F9B34FB';
+  static const String deviceInfoCharacteristic = '0000180A-0000-1000-8000-00805F9B34FB';
+
+  // Transmission power for RSSI calculation
+  static const int txPowerLevel = -59;
+}

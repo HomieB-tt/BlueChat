@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
@@ -7,8 +9,10 @@ import './widgets/device_card_widget.dart';
 import './widgets/empty_state_widget.dart';
 import './widgets/scanning_animation_widget.dart';
 import '../../services/storage_service.dart';
+import '../../services/bluetooth_service.dart';
 
 /// Device Discovery Screen - Bluetooth device scanning and pairing interface
+/// Now uses actual Bluetooth LE scanning with flutter_reactive_ble
 class DeviceDiscovery extends StatefulWidget {
   const DeviceDiscovery({super.key});
 
@@ -17,74 +21,92 @@ class DeviceDiscovery extends StatefulWidget {
 }
 
 class _DeviceDiscoveryState extends State<DeviceDiscovery> {
+  // Bluetooth service instance
+  final BluetoothService _bluetoothService = BluetoothService();
+  
   bool _isScanning = false;
-  final bool _hasPermission = true;
+  bool _hasPermission = false;
+  bool _isBluetoothAvailable = false;
   final List<Map<String, dynamic>> _discoveredDevices = [];
   final List<Map<String, dynamic>> _connectedDevices = [];
+  
+  // Stream subscriptions
+  StreamSubscription<BluetoothDevice>? _deviceSubscription;
+  StreamSubscription<bool>? _scanSubscription;
 
   @override
   void initState() {
     super.initState();
-    _loadDevices();
-    _startInitialScan();
+    _initializeBluetooth();
+    _loadPairedDevices();
   }
 
-  void _loadDevices() {
-    // Load from storage
+  /// Initialize Bluetooth service and check permissions
+  Future<void> _initializeBluetooth() async {
+    // Initialize the Bluetooth service
+    await _bluetoothService.initialize();
+    
+    // Check permissions
+    _hasPermission = await _bluetoothService.checkPermissions();
+    
+    // Check if Bluetooth is available
+    _isBluetoothAvailable = await _bluetoothService.isBluetoothAvailable();
+    
+    // Listen to scan state changes
+    _scanSubscription = _bluetoothService.isScanning.listen((scanning) {
+      if (mounted) {
+        setState(() {
+          _isScanning = scanning;
+        });
+      }
+    });
+
+    // Listen to discovered devices
+    _deviceSubscription = _bluetoothService.discoveredDevices.listen((device) {
+      if (mounted) {
+        setState(() {
+          // Check if device already exists
+          final existingIndex = _discoveredDevices
+              .indexWhere((d) => d['id'] == device.id);
+          
+          if (existingIndex >= 0) {
+            // Update existing device
+            _discoveredDevices[existingIndex] = device.toAppDeviceFormat();
+          } else {
+            // Add new device
+            _discoveredDevices.add(device.toAppDeviceFormat());
+          }
+          
+          // Update connected devices list
+          _updateConnectedDevices();
+        });
+      }
+    });
+    
+    // Start initial scan if permissions are granted
+    if (_hasPermission && _isBluetoothAvailable) {
+      _startInitialScan();
+    }
+    
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Load previously paired devices from storage
+  void _loadPairedDevices() {
     final savedDevices = StorageService.loadDevices();
     if (savedDevices.isNotEmpty) {
-      _discoveredDevices.addAll(savedDevices);
-    } else {
-      // Load mock devices
-      _discoveredDevices.addAll([
-        {
-          "id": "device_001",
-          "name": "Sarah's iPhone 13",
-          "deviceType": "phone",
-          "signalStrength": -45,
-          "connectionStatus": "available",
-          "lastSeen": DateTime.now().subtract(const Duration(seconds: 5)),
-          "isPaired": false,
-          "isBlocked": false,
-          "nickname": null,
-        },
-        {
-          "id": "device_002",
-          "name": "Michael's MacBook Pro",
-          "deviceType": "computer",
-          "signalStrength": -62,
-          "connectionStatus": "available",
-          "lastSeen": DateTime.now().subtract(const Duration(seconds: 12)),
-          "isPaired": true,
-          "isBlocked": false,
-          "nickname": "Work Laptop",
-        },
-        {
-          "id": "device_003",
-          "name": "Galaxy Tab S8",
-          "deviceType": "tablet",
-          "signalStrength": -78,
-          "connectionStatus": "available",
-          "lastSeen": DateTime.now().subtract(const Duration(seconds: 8)),
-          "isPaired": false,
-          "isBlocked": false,
-          "nickname": null,
-        },
-        {
-          "id": "device_004",
-          "name": "Emma's Pixel 7",
-          "deviceType": "phone",
-          "signalStrength": -55,
-          "connectionStatus": "connected",
-          "lastSeen": DateTime.now(),
-          "isPaired": true,
-          "isBlocked": false,
-          "nickname": "Emma",
-          "messageCount": 3,
-        },
-      ]);
+      setState(() {
+        _discoveredDevices.addAll(savedDevices);
+      });
+      _updateConnectedDevices();
     }
+  }
 
+  /// Update the connected devices list based on current state
+  void _updateConnectedDevices() {
+    _connectedDevices.clear();
     _connectedDevices.addAll(
       _discoveredDevices
           .where((device) => device["connectionStatus"] == "connected")
@@ -92,38 +114,49 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
     );
   }
 
-  void _startInitialScan() {
+  /// Start initial scan for nearby devices
+  void _startInitialScan() async {
+    if (!_hasPermission || !_isBluetoothAvailable) {
+      debugPrint('Cannot start scan: permissions=$_hasPermission, available=$_isBluetoothAvailable');
+      return;
+    }
+    
     setState(() => _isScanning = true);
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() => _isScanning = false);
-      }
-    });
+    await _bluetoothService.startScan(timeout: const Duration(seconds: 10));
   }
 
-  Future<void> _refreshDevices() async {
-    setState(() => _isScanning = true);
-    await Future.delayed(const Duration(seconds: 2));
+  /// Request permissions and start scanning
+  Future<void> _requestPermissionsAndScan() async {
+    final granted = await _bluetoothService.requestPermissions();
     if (mounted) {
       setState(() {
-        _isScanning = false;
-        for (var device in _discoveredDevices) {
-          device["lastSeen"] = DateTime.now().subtract(
-            Duration(seconds: (device["signalStrength"] as int).abs() ~/ 10),
-          );
-        }
+        _hasPermission = granted;
       });
+    }
+    
+    if (granted) {
+      _isBluetoothAvailable = await _bluetoothService.isBluetoothAvailable();
+      if (mounted) {
+        setState(() {});
+      }
+      _startInitialScan();
     }
   }
 
-  void _manualScan() {
-    if (_isScanning) return;
+  Future<void> _refreshDevices() async {
+    if (!_hasPermission || !_isBluetoothAvailable) {
+      await _requestPermissionsAndScan();
+      return;
+    }
+    
     setState(() => _isScanning = true);
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() => _isScanning = false);
-      }
-    });
+    await _bluetoothService.startScan(timeout: const Duration(seconds: 10));
+  }
+
+  void _manualScan() {
+    if (_isScanning || !_hasPermission || !_isBluetoothAvailable) return;
+    setState(() => _isScanning = true);
+    _bluetoothService.startScan(timeout: const Duration(seconds: 10));
   }
 
   void _connectToDevice(Map<String, dynamic> device) {
@@ -131,6 +164,10 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
       device["connectionStatus"] = "connecting";
     });
 
+    // Connect via Bluetooth service
+    _bluetoothService.connectToDevice(device['id']);
+    
+    // Simulate connection success after a delay
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
@@ -141,6 +178,8 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
             _connectedDevices.add(device);
           }
         });
+        // Save connected devices
+        StorageService.saveDevices(_discoveredDevices);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -154,10 +193,14 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
   }
 
   void _disconnectDevice(Map<String, dynamic> device) {
+    // Disconnect via Bluetooth service
+    _bluetoothService.disconnectFromDevice(device['id']);
+    
     setState(() {
       device["connectionStatus"] = "available";
       _connectedDevices.remove(device);
     });
+    StorageService.saveDevices(_discoveredDevices);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -175,6 +218,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
       device["nickname"] = null;
       _connectedDevices.remove(device);
     });
+    StorageService.saveDevices(_discoveredDevices);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Forgot ${device["name"]}'),
@@ -190,6 +234,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
       _connectedDevices.remove(device);
       _discoveredDevices.remove(device);
     });
+    StorageService.saveDevices(_discoveredDevices);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Blocked ${device["name"]}'),
@@ -229,6 +274,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
                       ? null
                       : nicknameController.text.trim();
                 });
+                StorageService.saveDevices(_discoveredDevices);
                 Navigator.of(context).pop();
               },
               child: const Text('Save'),
@@ -277,7 +323,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
             _buildDetailRow('Type', device["deviceType"], theme),
             _buildDetailRow(
               'Signal Strength',
-              '${device["signalStrength"]} dBm',
+              '${device["signalStrength"] ?? device["rssi"]} dBm',
               theme,
             ),
             _buildDetailRow('Status', device["connectionStatus"], theme),
@@ -325,6 +371,14 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
   }
 
   @override
+  void dispose() {
+    _deviceSubscription?.cancel();
+    _scanSubscription?.cancel();
+    _bluetoothService.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -366,7 +420,11 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
                               ),
                               SizedBox(width: 2.w),
                               Text(
-                                _isScanning ? 'Scanning...' : 'Ready',
+                                _isScanning 
+                                    ? 'Scanning...' 
+                                    : _hasPermission 
+                                        ? 'Ready' 
+                                        : 'Permission Required',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
@@ -376,8 +434,18 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
                         ],
                       ),
                     ),
+                    if (!_hasPermission)
+                      TextButton(
+                        onPressed: _requestPermissionsAndScan,
+                        child: Text(
+                          'Enable',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
                     IconButton(
-                      onPressed: _isScanning ? null : _manualScan,
+                      onPressed: _isScanning || !_hasPermission ? null : _manualScan,
                       icon: CustomIconWidget(
                         iconName: 'refresh',
                         color: _isScanning
@@ -404,6 +472,43 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
     final availableDevices = _discoveredDevices
         .where((device) => !(device["isBlocked"] as bool))
         .toList();
+
+    // Show permission request if no permission
+    if (!_hasPermission) {
+      return EmptyStateWidget(
+        onScan: _requestPermissionsAndScan,
+        hasPermission: _hasPermission,
+      );
+    }
+
+    // Show no Bluetooth available message
+    if (!_isBluetoothAvailable) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CustomIconWidget(
+              iconName: 'bluetooth_disabled',
+              color: theme.colorScheme.error,
+              size: 48,
+            ),
+            SizedBox(height: 2.h),
+            Text(
+              'Bluetooth Unavailable',
+              style: theme.textTheme.titleMedium,
+            ),
+            SizedBox(height: 1.h),
+            Text(
+              'Please enable Bluetooth to discover nearby devices',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
 
     return RefreshIndicator(
       onRefresh: _refreshDevices,

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Flutter Template</string>
+	<string>BlueChat</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,5 +45,17 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- Bluetooth permissions for iOS 13+ -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>BlueChat needs Bluetooth access to discover and connect to nearby devices for offline messaging.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>BlueChat needs Bluetooth access to discover and connect to nearby devices for offline messaging.</string>
+	
+	<!-- Location permissions for Bluetooth scanning on iOS -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BlueChat needs location access to discover nearby Bluetooth devices. Your location is not stored or shared.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>BlueChat needs location access to maintain Bluetooth connections with nearby devices.</string>
 </dict>
 </plist>

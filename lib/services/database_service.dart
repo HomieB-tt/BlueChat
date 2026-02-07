@@ -7,38 +7,40 @@ import '../core/env.dart';
 /// NOTE: Uses device-based identification instead of user authentication.
 /// Users are identified by their device ID (stored locally).
 class DatabaseService {
-  final SupabaseClient _client;
-  final String _deviceId;
-  final String _username;
+  static final DatabaseService _instance = DatabaseService._internal();
+  factory DatabaseService() => _instance;
+  DatabaseService._internal();
 
-  DatabaseService({
-    required String deviceId,
-    required String username,
-  })  : _client = Supabase.instance.client,
-        _deviceId = deviceId,
-        _username = username;
+  /// Initialize with device ID and username
+  void initialize({required String deviceId, required String username}) {
+    // TODO: Store device ID and username in storage
+  }
 
   // ==================== Profiles ====================
 
   /// Create or update user profile
-  Future<dynamic> upsertProfile({
+  static Future<dynamic> upsertProfile({
     required String username,
     String? avatarUrl,
   }) async {
-    final response = await _client.from(SupabaseTables.profiles).upsert({
-      'id': _deviceId,
-      'device_id': _deviceId,
-      'username': username,
-      'avatar_url': avatarUrl,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).select();
+    final deviceId = await _getDeviceId();
+    final response = await Supabase.instance.client
+        .from(SupabaseTables.profiles)
+        .upsert({
+          'id': deviceId,
+          'device_id': deviceId,
+          'username': username,
+          'avatar_url': avatarUrl,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .select();
     return response;
   }
 
   /// Get user profile by device ID
-  Future<dynamic> getProfile({String? deviceId}) async {
-    final id = deviceId ?? _deviceId;
-    final response = await _client
+  static Future<dynamic> getProfile({String? deviceId}) async {
+    final id = deviceId ?? await _getDeviceId();
+    final response = await Supabase.instance.client
         .from(SupabaseTables.profiles)
         .select()
         .eq('id', id)
@@ -47,21 +49,22 @@ class DatabaseService {
   }
 
   /// Update online status
-  Future<dynamic> updateOnlineStatus({required bool isOnline}) async {
-    final response = await _client
+  static Future<dynamic> updateOnlineStatus({required bool isOnline}) async {
+    final deviceId = await _getDeviceId();
+    final response = await Supabase.instance.client
         .from(SupabaseTables.profiles)
         .update({
           'is_online': isOnline,
           'last_seen': DateTime.now().toIso8601String(),
         })
-        .eq('id', _deviceId)
+        .eq('id', deviceId)
         .select();
     return response;
   }
 
   /// Get all online users
-  Future<List<dynamic>> getOnlineUsers() async {
-    final response = await _client
+  static Future<List<dynamic>> getOnlineUsers() async {
+    final response = await Supabase.instance.client
         .from(SupabaseTables.profiles)
         .select()
         .eq('is_online', true);
@@ -71,24 +74,28 @@ class DatabaseService {
   // ==================== Conversations ====================
 
   /// Create a new conversation
-  Future<dynamic> createConversation({
+  static Future<dynamic> createConversation({
     required String name,
     String? avatarUrl,
     bool isGroup = false,
   }) async {
-    final response = await _client.from(SupabaseTables.conversations).insert({
-      'name': name,
-      'avatar_url': avatarUrl,
-      'is_group': isGroup,
-      'created_by': _deviceId,
-      'created_at': DateTime.now().toIso8601String(),
-    }).select();
+    final deviceId = await _getDeviceId();
+    final response = await Supabase.instance.client
+        .from(SupabaseTables.conversations)
+        .insert({
+          'name': name,
+          'avatar_url': avatarUrl,
+          'is_group': isGroup,
+          'created_by': deviceId,
+          'created_at': DateTime.now().toIso8601String(),
+        })
+        .select();
 
     // Add creator as participant
     if (response.isNotEmpty) {
       await addParticipant(
         conversationId: response[0]['id'],
-        deviceId: _deviceId,
+        deviceId: deviceId,
         isAdmin: true,
       );
     }
@@ -97,8 +104,8 @@ class DatabaseService {
   }
 
   /// Get conversation by ID
-  Future<dynamic> getConversation({required String conversationId}) async {
-    final response = await _client
+  static Future<dynamic> getConversation({required String conversationId}) async {
+    final response = await Supabase.instance.client
         .from(SupabaseTables.conversations)
         .select()
         .eq('id', conversationId)
@@ -106,18 +113,34 @@ class DatabaseService {
     return response;
   }
 
-  /// Get all conversations for a user
-  Future<List<dynamic>> getUserConversations() async {
-    final response = await _client
+  /// Get all conversations for current device
+  static Future<List<Map<String, dynamic>>> getConversations() async {
+    final deviceId = await _getDeviceId();
+    final response = await Supabase.instance.client
         .from(SupabaseTables.chatParticipants)
         .select('conversation_id, conversations(*)')
-        .eq('device_id', _deviceId)
+        .eq('device_id', deviceId)
         .order('created_at', ascending: false);
-    return response;
+
+    // Transform response to proper format
+    return response.map((item) {
+      final conversation = item['conversations'] as Map<String, dynamic>;
+      return {
+        'id': conversation['id'],
+        'deviceId': conversation['id'],
+        'deviceName': conversation['name'] ?? 'Unknown',
+        'nickname': conversation['name'],
+        'lastMessage': '',
+        'lastMessageTime': DateTime.tryParse(conversation['created_at'] ?? ''),
+        'unreadCount': 0,
+        'isOnline': false,
+        'deviceType': 'phone',
+      };
+    }).toList();
   }
 
   /// Update conversation details
-  Future<dynamic> updateConversation({
+  static Future<dynamic> updateConversation({
     required String conversationId,
     String? name,
     String? avatarUrl,
@@ -128,7 +151,7 @@ class DatabaseService {
     if (name != null) updates['name'] = name;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
 
-    final response = await _client
+    final response = await Supabase.instance.client
         .from(SupabaseTables.conversations)
         .update(updates)
         .eq('id', conversationId)
@@ -137,44 +160,50 @@ class DatabaseService {
   }
 
   /// Delete conversation
-  Future<void> deleteConversation({required String conversationId}) async {
-    await _client
+  static Future<void> deleteConversation({required String conversationId}) async {
+    await Supabase.instance.client
         .from(SupabaseTables.conversations)
         .delete()
         .eq('id', conversationId);
   }
 
   /// Add participant to conversation
-  Future<dynamic> addParticipant({
+  static Future<dynamic> addParticipant({
     required String conversationId,
     String? deviceId,
     bool isAdmin = false,
   }) async {
-    final id = deviceId ?? _deviceId;
-    final response = await _client.from(SupabaseTables.chatParticipants).insert({
-      'conversation_id': conversationId,
-      'device_id': id,
-      'joined_at': DateTime.now().toIso8601String(),
-      'is_admin': isAdmin,
-    }).select();
+    final id = deviceId ?? await _getDeviceId();
+    final response = await Supabase.instance.client
+        .from(SupabaseTables.chatParticipants)
+        .insert({
+          'conversation_id': conversationId,
+          'device_id': id,
+          'joined_at': DateTime.now().toIso8601String(),
+          'is_admin': isAdmin,
+        })
+        .select();
     return response;
   }
 
   /// Remove participant from conversation
-  Future<void> removeParticipant({
+  static Future<void> removeParticipant({
     required String conversationId,
     String? deviceId,
   }) async {
-    final id = deviceId ?? _deviceId;
-    await _client.from(SupabaseTables.chatParticipants).delete().match({
-      'conversation_id': conversationId,
-      'device_id': id,
-    });
+    final id = deviceId ?? await _getDeviceId();
+    await Supabase.instance.client
+        .from(SupabaseTables.chatParticipants)
+        .delete()
+        .match({
+          'conversation_id': conversationId,
+          'device_id': id,
+        });
   }
 
   /// Get conversation participants
-  Future<List<dynamic>> getParticipants({required String conversationId}) async {
-    final response = await _client
+  static Future<List<dynamic>> getParticipants({required String conversationId}) async {
+    final response = await Supabase.instance.client
         .from(SupabaseTables.chatParticipants)
         .select()
         .eq('conversation_id', conversationId);
@@ -184,84 +213,105 @@ class DatabaseService {
   // ==================== Messages ====================
 
   /// Send a new message
-  Future<dynamic> sendMessage({
+  static Future<dynamic> sendMessage(
+    String content, {
     required String conversationId,
-    required String content,
     String? messageType,
     String? attachmentUrl,
+    bool isSent = true,
   }) async {
-    final response = await _client.from(SupabaseTables.messages).insert({
-      'conversation_id': conversationId,
-      'sender_device_id': _deviceId,
-      'sender_name': _username,
-      'content': content,
-      'message_type': messageType ?? 'text',
-      'attachment_url': attachmentUrl,
-      'created_at': DateTime.now().toIso8601String(),
-      'is_read': false,
-    }).select();
+    final deviceId = await _getDeviceId();
+    final username = await _getUsername();
+    
+    final response = await Supabase.instance.client
+        .from(SupabaseTables.messages)
+        .insert({
+          'conversation_id': conversationId,
+          'sender_device_id': deviceId,
+          'sender_name': username,
+          'content': content,
+          'message_type': messageType ?? 'text',
+          'attachment_url': attachmentUrl,
+          'created_at': DateTime.now().toIso8601String(),
+          'is_read': false,
+        })
+        .select();
     return response;
   }
 
   /// Get messages for a conversation
-  Future<List<dynamic>> getMessages({
+  static Future<List<Map<String, dynamic>>> getMessages({
     required String conversationId,
     int limit = 50,
     int offset = 0,
   }) async {
-    final response = await _client
+    final deviceId = await _getDeviceId();
+    final response = await Supabase.instance.client
         .from(SupabaseTables.messages)
         .select()
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
         .limit(limit)
         .range(offset, offset + limit - 1);
-    return response;
+
+    // Transform response to proper format
+    return response.map((msg) {
+      return {
+        'id': msg['id'],
+        'text': msg['content'],
+        'timestamp': DateTime.tryParse(msg['created_at'] ?? ''),
+        'isSent': msg['sender_device_id'] == deviceId,
+        'status': msg['is_read'] ? 'delivered' : 'sent',
+        'senderName': msg['sender_name'] ?? 'Unknown',
+      };
+    }).toList();
   }
 
   /// Get unread message count for a conversation
-  Future<int> getUnreadCount({required String conversationId}) async {
-    final response = await _client
+  static Future<int> getUnreadCount({required String conversationId}) async {
+    final deviceId = await _getDeviceId();
+    final response = await Supabase.instance.client
         .from(SupabaseTables.messages)
         .select()
         .eq('conversation_id', conversationId)
         .eq('is_read', false)
-        .neq('sender_device_id', _deviceId);
+        .neq('sender_device_id', deviceId);
     return response.length;
   }
 
   /// Mark message as read
-  Future<void> markAsRead({required String messageId}) async {
-    await _client
+  static Future<void> markAsRead({required String messageId}) async {
+    await Supabase.instance.client
         .from(SupabaseTables.messages)
         .update({'is_read': true})
         .eq('id', messageId);
   }
 
   /// Mark all messages in conversation as read
-  Future<void> markConversationAsRead({required String conversationId}) async {
-    await _client
+  static Future<void> markConversationAsRead({required String conversationId}) async {
+    final deviceId = await _getDeviceId();
+    await Supabase.instance.client
         .from(SupabaseTables.messages)
         .update({'is_read': true})
         .eq('conversation_id', conversationId)
-        .neq('sender_device_id', _deviceId)
+        .neq('sender_device_id', deviceId)
         .eq('is_read', false);
   }
 
   /// Delete a message
-  Future<void> deleteMessage({required String messageId}) async {
-    await _client
+  static Future<void> deleteMessage({required String messageId}) async {
+    await Supabase.instance.client
         .from(SupabaseTables.messages)
         .delete()
         .eq('id', messageId);
   }
 
   /// Update message content
-  Future<dynamic> updateMessage({
+  static Future<dynamic> updateMessage({
     required String messageId,
     required String content,
   }) async {
-    final response = await _client
+    final response = await Supabase.instance.client
         .from(SupabaseTables.messages)
         .update({
           'content': content,
@@ -275,11 +325,11 @@ class DatabaseService {
   // ==================== Search ====================
 
   /// Search messages by content
-  Future<List<dynamic>> searchMessages({
+  static Future<List<dynamic>> searchMessages({
     required String conversationId,
     required String query,
   }) async {
-    final response = await _client
+    final response = await Supabase.instance.client
         .from(SupabaseTables.messages)
         .select()
         .eq('conversation_id', conversationId)
@@ -289,12 +339,27 @@ class DatabaseService {
   }
 
   /// Search users by username
-  Future<List<dynamic>> searchUsers({required String query}) async {
-    final response = await _client
+  static Future<List<dynamic>> searchUsers({required String query}) async {
+    final response = await Supabase.instance.client
         .from(SupabaseTables.profiles)
         .select()
         .ilike('username', '%$query%')
         .limit(20);
     return response;
+  }
+
+  // ==================== Helpers ====================
+
+  /// Get device ID from storage
+  static Future<String> _getDeviceId() async {
+    // TODO: Implement device ID retrieval from storage
+    // For now, generate a random ID
+    return 'device_${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  /// Get username from storage
+  static Future<String> _getUsername() async {
+    // TODO: Implement username retrieval from storage
+    return 'User';
   }
 }

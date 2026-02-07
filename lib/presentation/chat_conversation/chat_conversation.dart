@@ -6,12 +6,20 @@ import '../../widgets/custom_icon_widget.dart';
 import './widgets/connection_status_banner_widget.dart';
 import './widgets/message_bubble_widget.dart';
 import './widgets/message_input_widget.dart';
+import '../../services/database_service.dart';
 
 /// Chat Conversation Screen
 /// Provides intuitive messaging interface optimized for Bluetooth communication
 /// with connection status awareness and offline capabilities
 class ChatConversation extends StatefulWidget {
-  const ChatConversation({super.key});
+  final String? conversationId;
+  final String? deviceName;
+  
+  const ChatConversation({
+    super.key,
+    this.conversationId,
+    this.deviceName,
+  });
 
   @override
   State<ChatConversation> createState() => _ChatConversationState();
@@ -24,75 +32,36 @@ class _ChatConversationState extends State<ChatConversation> {
   bool _isConnected = true;
   bool _isReconnecting = false;
   int _unreadCount = 0;
-  final int _pendingMessagesCount = 2;
-
-  // Mock data for messages
-  final List<Map<String, dynamic>> _messages = [
-    {
-      "id": "1",
-      "text": "Hey! Are you there?",
-      "timestamp": DateTime.now().subtract(const Duration(minutes: 45)),
-      "isSent": false,
-      "status": "delivered",
-      "senderName": "Alex Johnson",
-    },
-    {
-      "id": "2",
-      "text": "Yes, I'm here! How can I help you?",
-      "timestamp": DateTime.now().subtract(const Duration(minutes: 44)),
-      "isSent": true,
-      "status": "delivered",
-      "senderName": "You",
-    },
-    {
-      "id": "3",
-      "text": "I wanted to check if you received the files I sent earlier",
-      "timestamp": DateTime.now().subtract(const Duration(minutes: 43)),
-      "isSent": false,
-      "status": "delivered",
-      "senderName": "Alex Johnson",
-    },
-    {
-      "id": "4",
-      "text": "Yes, I got them. Thanks for sending!",
-      "timestamp": DateTime.now().subtract(const Duration(minutes: 42)),
-      "isSent": true,
-      "status": "delivered",
-      "senderName": "You",
-    },
-    {
-      "id": "5",
-      "text": "Great! Let me know if you need anything else",
-      "timestamp": DateTime.now().subtract(const Duration(minutes: 41)),
-      "isSent": false,
-      "status": "delivered",
-      "senderName": "Alex Johnson",
-    },
-    {
-      "id": "6",
-      "text": "Will do, thanks again!",
-      "timestamp": DateTime.now().subtract(const Duration(minutes: 40)),
-      "isSent": true,
-      "status": "sent",
-      "senderName": "You",
-    },
-    {
-      "id": "7",
-      "text": "This message is pending...",
-      "timestamp": DateTime.now().subtract(const Duration(minutes: 2)),
-      "isSent": true,
-      "status": "sending",
-      "senderName": "You",
-    },
-  ];
+  final int _pendingMessagesCount = 0;
+  final List<Map<String, dynamic>> _messages = [];
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadMessages();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
+  }
+
+  /// Load messages from Supabase
+  Future<void> _loadMessages() async {
+    final conversationId = widget.conversationId ?? 'default';
+    try {
+      final messages = await DatabaseService.getMessages(
+        conversationId: conversationId,
+      );
+      if (mounted) {
+        setState(() {
+          _messages.clear();
+          _messages.addAll(messages);
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      debugPrint('Error loading messages: $e');
+    }
   }
 
   @override
@@ -130,6 +99,7 @@ class _ChatConversationState extends State<ChatConversation> {
     setState(() {
       _isReconnecting = true;
     });
+    // Reconnect logic using Bluetooth service
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
@@ -143,10 +113,13 @@ class _ChatConversationState extends State<ChatConversation> {
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty) return;
 
+    final messageText = _messageController.text.trim();
+    final conversationId = widget.conversationId ?? 'default';
+    
     setState(() {
       _messages.add({
         "id": DateTime.now().millisecondsSinceEpoch.toString(),
-        "text": _messageController.text.trim(),
+        "text": messageText,
         "timestamp": DateTime.now(),
         "isSent": true,
         "status": _isConnected ? "sending" : "pending",
@@ -158,6 +131,12 @@ class _ChatConversationState extends State<ChatConversation> {
     Future.delayed(const Duration(milliseconds: 100), () {
       _scrollToBottom();
     });
+
+    // Save message to Supabase
+    DatabaseService.sendMessage(
+      messageText,
+      conversationId: conversationId,
+    );
 
     if (_isConnected) {
       Future.delayed(const Duration(seconds: 1), () {
@@ -178,6 +157,7 @@ class _ChatConversationState extends State<ChatConversation> {
       }
     });
 
+    // Resend message logic
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
         setState(() {
@@ -210,6 +190,7 @@ class _ChatConversationState extends State<ChatConversation> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final deviceName = widget.deviceName ?? 'Device';
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -249,7 +230,7 @@ class _ChatConversationState extends State<ChatConversation> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Alex Johnson",
+                    deviceName,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -313,19 +294,45 @@ class _ChatConversationState extends State<ChatConversation> {
           Expanded(
             child: Stack(
               children: [
-                ListView.builder(
-                  controller: _scrollController,
-                  padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    final message = _messages[index];
-                    return MessageBubbleWidget(
-                      message: message,
-                      onRetry: () => _retryMessage(message["id"] as String),
-                      formatTimestamp: _formatTimestamp,
-                    );
-                  },
-                ),
+                _messages.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CustomIconWidget(
+                              iconName: 'chat_bubble_outline',
+                              color: theme.colorScheme.onSurfaceVariant,
+                              size: 64,
+                            ),
+                            SizedBox(height: 2.h),
+                            Text(
+                              'No messages yet',
+                              style: theme.textTheme.titleLarge,
+                            ),
+                            SizedBox(height: 1.h),
+                            Text(
+                              'Start a conversation by sending a message',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final message = _messages[index];
+                          return MessageBubbleWidget(
+                            message: message,
+                            onRetry: () => _retryMessage(message["id"] as String),
+                            formatTimestamp: _formatTimestamp,
+                          );
+                        },
+                      ),
                 if (_showScrollToBottom)
                   Positioned(
                     right: 4.w,
