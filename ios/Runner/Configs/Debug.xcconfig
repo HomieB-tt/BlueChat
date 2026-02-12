@@ -1,0 +1,12 @@
+//
+// Debug configuration
+// This file is distributed under the same license as the BlueChat application.
+//
+
+#include "Generated.xcconfig"
+
+// Debug-specific settings
+FLUTTER_BUILD_MODE = debug
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+ENABLE_BITCODE = NO
+ONLY_ACTIVE_ARCH = YES

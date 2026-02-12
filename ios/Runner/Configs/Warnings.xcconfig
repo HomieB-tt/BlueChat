@@ -1,0 +1,7 @@
+//
+// Warnings configuration
+// This file is distributed under the same license as the BlueChat application.
+//
+
+// Warning settings
+GCC_WARN_UNINITIALIZED = YES

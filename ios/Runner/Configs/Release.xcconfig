@@ -1,0 +1,11 @@
+//
+// Release configuration
+// This file is distributed under the same license as the BlueChat application.
+//
+
+#include "Generated.xcconfig"
+
+// Release-specific settings
+FLUTTER_BUILD_MODE = release
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+ENABLE_BITCODE = NO

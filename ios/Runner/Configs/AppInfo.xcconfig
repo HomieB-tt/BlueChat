@@ -1,0 +1,12 @@
+//
+// App Info
+// This file is distributed under the same license as the BlueChat application.
+//
+
+// App settings
+PRODUCT_NAME = BlueChat
+PRODUCT_BUNDLE_IDENTIFIER = org.drop.bluechat
+PRODUCT_BUILD_VERSION = 1.0.0
+PRODUCT_SETTINGS_VERSION = 1
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
