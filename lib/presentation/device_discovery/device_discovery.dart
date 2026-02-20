@@ -46,11 +46,11 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
     // Initialize the Bluetooth service
     await _bluetoothService.initialize();
     
-    // Check permissions
-    _hasPermission = await _bluetoothService.checkPermissions();
+    // Check if Bluetooth is turned on (instead of checking permissions)
+    _isBluetoothAvailable = await _bluetoothService.isBluetoothOn();
     
-    // Check if Bluetooth is available
-    _isBluetoothAvailable = await _bluetoothService.isBluetoothAvailable();
+    // Check permissions (needed for scanning on Android)
+    _hasPermission = await _bluetoothService.checkPermissions();
     
     // Listen to scan state changes
     _scanSubscription = _bluetoothService.isScanning.listen((scanning) {
@@ -83,7 +83,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
       }
     });
     
-    // Start initial scan if permissions are granted
+    // Start initial scan if Bluetooth is on and permissions granted
     if (_hasPermission && _isBluetoothAvailable) {
       _startInitialScan();
     }
@@ -126,7 +126,26 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
   }
 
   /// Request permissions and start scanning
+  /// Now opens Bluetooth settings instead of requesting permissions
   Future<void> _requestPermissionsAndScan() async {
+    // Check if Bluetooth is on
+    final isBluetoothOn = await _bluetoothService.isBluetoothOn();
+    
+    if (!isBluetoothOn) {
+      // Bluetooth is off, prompt user to turn it on
+      final opened = await _bluetoothService.openBluetoothSettings();
+      if (opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please turn on Bluetooth to scan devices'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Bluetooth is on, now check/request permissions
     final granted = await _bluetoothService.requestPermissions();
     if (mounted) {
       setState(() {
@@ -135,7 +154,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
     }
     
     if (granted) {
-      _isBluetoothAvailable = await _bluetoothService.isBluetoothAvailable();
+      _isBluetoothAvailable = await _bluetoothService.isBluetoothOn();
       if (mounted) {
         setState(() {});
       }
@@ -144,7 +163,17 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
   }
 
   Future<void> _refreshDevices() async {
-    if (!_hasPermission || !_isBluetoothAvailable) {
+    // Check if Bluetooth is on
+    final isBluetoothOn = await _bluetoothService.isBluetoothOn();
+    
+    if (!isBluetoothOn) {
+      // Bluetooth is off, prompt user to turn it on
+      await _requestPermissionsAndScan();
+      return;
+    }
+    
+    // Check permissions
+    if (!_hasPermission) {
       await _requestPermissionsAndScan();
       return;
     }
@@ -154,7 +183,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
   }
 
   void _manualScan() {
-    if (_isScanning || !_hasPermission || !_isBluetoothAvailable) return;
+    if (_isScanning || !_isBluetoothAvailable || !_hasPermission) return;
     setState(() => _isScanning = true);
     _bluetoothService.startScan(timeout: const Duration(seconds: 10));
   }
@@ -422,9 +451,9 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
                               Text(
                                 _isScanning 
                                     ? 'Scanning...' 
-                                    : _hasPermission 
+                                    : _isBluetoothAvailable 
                                         ? 'Ready' 
-                                        : 'Permission Required',
+                                        : 'Bluetooth Off',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
@@ -434,18 +463,18 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
                         ],
                       ),
                     ),
-                    if (!_hasPermission)
+                    if (!_isBluetoothAvailable)
                       TextButton(
                         onPressed: _requestPermissionsAndScan,
                         child: Text(
-                          'Enable',
+                          'Turn On',
                           style: theme.textTheme.labelMedium?.copyWith(
                             color: theme.colorScheme.primary,
                           ),
                         ),
                       ),
                     IconButton(
-                      onPressed: _isScanning || !_hasPermission ? null : _manualScan,
+                      onPressed: _isScanning || !_isBluetoothAvailable || !_hasPermission ? null : _manualScan,
                       icon: CustomIconWidget(
                         iconName: 'refresh',
                         color: _isScanning
@@ -494,7 +523,7 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
             ),
             SizedBox(height: 2.h),
             Text(
-              'Bluetooth Unavailable',
+              'Bluetooth is Off',
               style: theme.textTheme.titleMedium,
             ),
             SizedBox(height: 1.h),
@@ -504,6 +533,12 @@ class _DeviceDiscoveryState extends State<DeviceDiscovery> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 2.h),
+            ElevatedButton.icon(
+              onPressed: _requestPermissionsAndScan,
+              icon: const Icon(Icons.bluetooth),
+              label: const Text('Turn On Bluetooth'),
             ),
           ],
         ),

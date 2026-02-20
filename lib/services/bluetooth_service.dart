@@ -77,11 +77,19 @@ class BluetoothDevice {
   String _determineDeviceType(String? deviceName) {
     if (deviceName == null) return 'unknown';
     final name = deviceName.toLowerCase();
-    if (name.contains('iphone') || name.contains('pixel') || name.contains('galaxy') || name.contains('android')) {
+    if (name.contains('iphone') ||
+        name.contains('pixel') ||
+        name.contains('galaxy') ||
+        name.contains('android')) {
       return 'phone';
-    } else if (name.contains('macbook') || name.contains('laptop') || name.contains('computer') || name.contains('pc')) {
+    } else if (name.contains('macbook') ||
+        name.contains('laptop') ||
+        name.contains('computer') ||
+        name.contains('pc')) {
       return 'computer';
-    } else if (name.contains('ipad') || name.contains('tablet') || name.contains('tab')) {
+    } else if (name.contains('ipad') ||
+        name.contains('tablet') ||
+        name.contains('tab')) {
       return 'tablet';
     }
     return 'unknown';
@@ -107,11 +115,11 @@ class BluetoothService {
 
   // Flutter Reactive BLE instance
   FlutterReactiveBle? _ble;
-  
+
   // Stream subscriptions
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
-  
+
   // Streams
   final StreamController<BluetoothDevice> _deviceDiscoverdController =
       StreamController<BluetoothDevice>.broadcast();
@@ -135,8 +143,7 @@ class BluetoothService {
   Stream<bool> get isScanning => _isScanningController.stream;
 
   /// Get currently cached discovered devices
-  List<BluetoothDevice> get cachedDevices =>
-      _discoveredDevices.values.toList();
+  List<BluetoothDevice> get cachedDevices => _discoveredDevices.values.toList();
 
   /// Initialize the Bluetooth service
   Future<void> initialize() async {
@@ -147,7 +154,7 @@ class BluetoothService {
     }
 
     _ble = FlutterReactiveBle();
-    
+
     // Monitor Bluetooth state
     _ble!.connectedDeviceStream.listen((update) {
       _handleConnectionStateUpdate(update);
@@ -183,16 +190,16 @@ class BluetoothService {
       final bluetoothScan = await Permission.bluetoothScan.status;
       final bluetoothConnect = await Permission.bluetoothConnect.status;
       final location = await Permission.location.status;
-      
-      return bluetoothScan.isGranted && 
-             bluetoothConnect.isGranted && 
-             location.isGranted;
+
+      return bluetoothScan.isGranted &&
+          bluetoothConnect.isGranted &&
+          location.isGranted;
     } else if (Platform.isIOS) {
       final bluetooth = await Permission.bluetooth.status;
       final location = await Permission.location.status;
       return bluetooth.isGranted && location.isGranted;
     }
-    
+
     return false;
   }
 
@@ -215,10 +222,7 @@ class BluetoothService {
       ].request();
     } else if (Platform.isIOS) {
       // iOS requires Bluetooth and location permissions
-      statuses = await [
-        Permission.bluetooth,
-        Permission.location,
-      ].request();
+      statuses = await [Permission.bluetooth, Permission.location].request();
     }
 
     // Check if all required permissions are granted
@@ -232,7 +236,7 @@ class BluetoothService {
     }
 
     if (_ble == null) return false;
-    
+
     try {
       // Check Bluetooth status via permission
       if (Platform.isAndroid) {
@@ -246,6 +250,56 @@ class BluetoothService {
       return true;
     } catch (e) {
       debugPrint('Error checking Bluetooth availability: $e');
+      return false;
+    }
+  }
+
+  /// Check if Bluetooth is currently turned on
+  /// Returns true if Bluetooth is powered on and available
+  Future<bool> isBluetoothOn() async {
+    if (kIsWeb) {
+      return false;
+    }
+
+    if (_ble == null) return false;
+
+    try {
+      // Check if Bluetooth permissions are granted and Bluetooth is available
+      final hasPermissions = await checkPermissions();
+      if (!hasPermissions) return false;
+
+      // On Android, we can check via the Bluetooth adapter state
+      // For simplicity, we check if permissions are granted
+      // In a real app, you might want to use flutter_blue_plus or similar
+      // to get the actual Bluetooth state
+      if (Platform.isAndroid) {
+        final bluetoothPermission = await Permission.bluetooth.status;
+        final locationPermission = await Permission.location.status;
+        return bluetoothPermission.isGranted && locationPermission.isGranted;
+      }
+
+      if (Platform.isIOS) {
+        final bluetoothPermission = await Permission.bluetooth.status;
+        return bluetoothPermission.isGranted;
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Error checking if Bluetooth is on: $e');
+      return false;
+    }
+  }
+
+  /// Open device Bluetooth settings
+  /// Returns true if settings were opened successfully
+  Future<bool> openBluetoothSettings() async {
+    try {
+      // Use permission_handler to open app settings
+      // This will open the app's settings page where Bluetooth can be enabled
+      final opened = await openAppSettings();
+      return opened;
+    } catch (e) {
+      debugPrint('Error opening Bluetooth settings: $e');
       return false;
     }
   }
@@ -273,25 +327,29 @@ class BluetoothService {
 
     try {
       // Subscribe to scan results using flutter_reactive_ble
-      _scanSubscription = _ble!.scanForDevices(
-        withServices: services ?? [Uuid.parse(BLEConstants.serviceUuid)],
-        scanMode: ScanMode.lowLatency,
-      ).listen(
-        (device) {
-          // Create our wrapper object
-          final bluetoothDevice = BluetoothDevice.fromReactiveDevice(device);
-          
-          // Update or add device to cache
-          _discoveredDevices[device.id] = bluetoothDevice;
+      _scanSubscription = _ble!
+          .scanForDevices(
+            withServices: services ?? [Uuid.parse(BLEConstants.serviceUuid)],
+            scanMode: ScanMode.lowLatency,
+          )
+          .listen(
+            (device) {
+              // Create our wrapper object
+              final bluetoothDevice = BluetoothDevice.fromReactiveDevice(
+                device,
+              );
 
-          // Emit device discovery event
-          _deviceDiscoverdController.add(bluetoothDevice);
-        },
-        onError: (error) {
-          debugPrint('Error during device scan: $error');
-          stopScan();
-        },
-      );
+              // Update or add device to cache
+              _discoveredDevices[device.id] = bluetoothDevice;
+
+              // Emit device discovery event
+              _deviceDiscoverdController.add(bluetoothDevice);
+            },
+            onError: (error) {
+              debugPrint('Error during device scan: $error');
+              stopScan();
+            },
+          );
 
       // Set timeout to stop scanning
       if (timeout.inMilliseconds > 0) {
@@ -321,18 +379,20 @@ class BluetoothService {
     if (_ble == null || kIsWeb) return;
 
     try {
-      _connectionSubscription = _ble!.connectToAdvertisingDevice(
-        id: deviceId,
-        prescanDuration: const Duration(seconds: 10),
-        withServices: [Uuid.parse(BLEConstants.serviceUuid)],
-      ).listen(
-        (update) {
-          _handleConnectionStateUpdate(update);
-        },
-        onError: (error) {
-          debugPrint('Error connecting to device: $error');
-        },
-      );
+      _connectionSubscription = _ble!
+          .connectToAdvertisingDevice(
+            id: deviceId,
+            prescanDuration: const Duration(seconds: 10),
+            withServices: [Uuid.parse(BLEConstants.serviceUuid)],
+          )
+          .listen(
+            (update) {
+              _handleConnectionStateUpdate(update);
+            },
+            onError: (error) {
+              debugPrint('Error connecting to device: $error');
+            },
+          );
     } catch (e) {
       debugPrint('Error initiating connection: $e');
     }
@@ -367,7 +427,7 @@ class BluetoothService {
         serviceId: Uuid.parse(serviceUuid),
         characteristicId: Uuid.parse(characteristicId),
       );
-      
+
       await _ble!.writeCharacteristicWithResponse(characteristic, value: value);
     } catch (e) {
       debugPrint('Error writing to characteristic: $e');
@@ -388,7 +448,7 @@ class BluetoothService {
         serviceId: Uuid.parse(serviceUuid),
         characteristicId: Uuid.parse(characteristicId),
       );
-      
+
       return await _ble!.readCharacteristic(characteristic);
     } catch (e) {
       debugPrint('Error reading from characteristic: $e');
@@ -411,7 +471,7 @@ class BluetoothService {
       serviceId: Uuid.parse(serviceUuid),
       characteristicId: Uuid.parse(characteristicId),
     );
-    
+
     return _ble!.subscribeToCharacteristic(characteristic);
   }
 

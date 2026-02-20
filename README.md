@@ -25,19 +25,69 @@ flutter run
 ## 📁 Project Structure
 
 ```
-flutter_app/
-├── android/            # Android-specific configuration
+bluechat/
+├── android/            # Android-specific configuration and native code
 ├── ios/                # iOS-specific configuration
 ├── lib/
-│   ├── core/           # Core utilities and services
-│   │   └── utils/      # Utility classes
+│   ├── core/          # Core utilities and configurations
+│   │   ├── app_export.dart
+│   │   ├── env.dart
+│   │   └── supabase_client.dart
 │   ├── presentation/   # UI screens and widgets
-│   │   └── splash_screen/ # Splash screen implementation
+│   │   ├── bluetooth_onboarding/    # Bluetooth setup screens
+│   │   │   ├── bluetooth_onboarding.dart
+│   │   │   └── widgets/
+│   │   │       ├── benefit_card_widget.dart
+│   │   │       └── onboarding_page_widget.dart
+│   │   ├── chat_conversation/       # Chat screen
+│   │   │   ├── chat_conversation.dart
+│   │   │   └── widgets/
+│   │   │       ├── connection_status_banner_widget.dart
+│   │   │       ├── message_bubble_widget.dart
+│   │   │       └── message_input_widget.dart
+│   │   ├── device_discovery/         # Device scanning screen
+│   │   │   ├── device_discovery.dart
+│   │   │   └── widgets/
+│   │   │       ├── device_card_widget.dart
+│   │   │       ├── empty_state_widget.dart
+│   │   │       └── scanning_animation_widget.dart
+│   │   ├── home_screen/             # Main home screen
+│   │   │   └── home_screen.dart
+│   │   ├── messages_view/            # Messages list screen
+│   │   │   ├── messages_view.dart
+│   │   │   └── widgets/
+│   │   │       └── conversation_card_widget.dart
+│   │   ├── permission_request/      # Permission screens
+│   │   │   ├── permission_request.dart
+│   │   │   └── widgets/
+│   │   │       ├── permission_card_widget.dart
+│   │   │       └── permission_explanation_widget.dart
+│   │   ├── settings/                # Settings screen
+│   │   │   ├── settings.dart
+│   │   │   └── widgets/
+│   │   │       ├── action_button_widget.dart
+│   │   │       ├── profile_header_widget.dart
+│   │   │       └── settings_section_widget.dart
+│   │   └── splash_screen/           # Splash screen
+│   │       └── splash_screen.dart
 │   ├── routes/         # Application routing
+│   │   └── app_routes.dart
+│   ├── services/       # Business logic services
+│   │   ├── bluetooth_service.dart    # Bluetooth LE operations
+│   │   ├── database_service.dart
+│   │   ├── realtime_service.dart
+│   │   ├── storage_service.dart
+│   │   └── user_service.dart
 │   ├── theme/          # Theme configuration
+│   │   └── app_theme.dart
 │   ├── widgets/        # Reusable UI components
+│   │   ├── custom_bottom_bar.dart
+│   │   ├── custom_error_widget.dart
+│   │   ├── custom_icon_widget.dart
+│   │   └── custom_image_widget.dart
 │   └── main.dart       # Application entry point
-├── assets/             # Static assets (images, fonts, etc.)
+├── assets/             # Static assets (images, etc.)
+│   └── images/
 ├── pubspec.yaml        # Project dependencies and configuration
 └── README.md           # Project documentation
 ```

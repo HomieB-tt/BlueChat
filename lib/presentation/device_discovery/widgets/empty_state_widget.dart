@@ -50,7 +50,7 @@ class EmptyStateWidget extends StatelessWidget {
             Text(
               hasPermission
                   ? 'We couldn\'t find any nearby Bluetooth devices. Try the following:'
-                  : 'Bluetooth permissions are required to discover devices.',
+                  : 'Please turn on Bluetooth to discover nearby devices.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -134,22 +134,13 @@ class EmptyStateWidget extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Please enable Bluetooth permissions in Settings',
-                        ),
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  },
+                  onPressed: onScan,
                   icon: CustomIconWidget(
                     iconName: 'settings',
                     color: theme.colorScheme.onPrimary,
                     size: 20,
                   ),
-                  label: const Text('Open Settings'),
+                  label: const Text('Turn On Bluetooth'),
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: 1.5.h),
                   ),
