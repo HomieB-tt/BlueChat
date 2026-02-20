@@ -3,6 +3,7 @@ import 'package:sizer/sizer.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../../core/app_export.dart';
+import '../../services/bluetooth_service.dart';
 import '../../services/storage_service.dart';
 import '../../widgets/custom_icon_widget.dart';
 import './widgets/benefit_card_widget.dart';
@@ -18,11 +19,14 @@ class BluetoothOnboarding extends StatefulWidget {
 }
 
 class _BluetoothOnboardingState extends State<BluetoothOnboarding>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   late AnimationController _animationController;
   bool _isLoading = false;
+  bool _isBluetoothOn = false;
+
+  final BluetoothService _bluetoothService = BluetoothService();
 
   final List<Map<String, dynamic>> _onboardingData = [
     {
@@ -111,10 +115,36 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
       duration: const Duration(milliseconds: 300),
     );
     _animationController.forward();
+    _checkBluetoothStatus();
+    // Add observer to detect when app resumes from background
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Check Bluetooth status when app resumes (user returns from settings)
+    if (state == AppLifecycleState.resumed) {
+      _checkBluetoothStatus();
+    }
+  }
+
+  /// Check if Bluetooth is currently turned on
+  Future<void> _checkBluetoothStatus() async {
+    try {
+      final isOn = await _bluetoothService.isBluetoothOn();
+      if (mounted) {
+        setState(() {
+          _isBluetoothOn = isOn;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking Bluetooth status: $e');
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _animationController.dispose();
     super.dispose();
@@ -126,12 +156,58 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
     });
   }
 
-  Future<void> _handleEnableBluetooth() async {
+  /// Show dialog to prompt user to turn on Bluetooth
+  void _showBluetoothOffDialog() {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Bluetooth Required',
+            style: theme.textTheme.titleLarge,
+          ),
+          content: Text(
+            'BlueChat requires Bluetooth to be turned on to discover and connect to nearby devices. Please enable Bluetooth in your phone settings.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                // Open Bluetooth settings
+                await _bluetoothService.openBluetoothSettings();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _handleContinue() async {
+    // Check if Bluetooth is on
+    final isBluetoothOn = await _bluetoothService.isBluetoothOn();
+    
+    if (!isBluetoothOn) {
+      // Show dialog to prompt user to turn on Bluetooth
+      _showBluetoothOffDialog();
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     // Mark onboarding as completed
     await StorageService.setOnboardingCompleted(true);
@@ -233,7 +309,15 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  SizedBox(width: 48),
+                  TextButton(
+                    onPressed: _handleSkip,
+                    child: Text(
+                      'Skip',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -284,13 +368,93 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
                   _currentPage == _onboardingData.length - 1
                       ? Column(
                           children: [
+                            // Bluetooth Status Card
+                            Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(3.w),
+                              decoration: BoxDecoration(
+                                color: _isBluetoothOn
+                                    ? Colors.green.withValues(alpha: 0.1)
+                                    : Colors.red.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _isBluetoothOn
+                                      ? Colors.green.withValues(alpha: 0.3)
+                                      : Colors.red.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 10.w,
+                                    height: 10.w,
+                                    decoration: BoxDecoration(
+                                      color: _isBluetoothOn
+                                          ? Colors.green.withValues(alpha: 0.2)
+                                          : Colors.red.withValues(alpha: 0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: CustomIconWidget(
+                                        iconName: _isBluetoothOn
+                                            ? 'bluetooth'
+                                            : 'bluetooth_disabled',
+                                        color: _isBluetoothOn
+                                            ? Colors.green
+                                            : Colors.red,
+                                        size: 5.w,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 3.w),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Bluetooth Status',
+                                          style: theme.textTheme.labelLarge?.copyWith(
+                                            color: theme.colorScheme.onSurface,
+                                          ),
+                                        ),
+                                        SizedBox(height: 0.5.h),
+                                        Text(
+                                          _isBluetoothOn ? 'Enabled' : 'Disabled',
+                                          style: theme.textTheme.bodyMedium?.copyWith(
+                                            color: _isBluetoothOn
+                                                ? Colors.green
+                                                : Colors.red,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (!_isBluetoothOn)
+                                    TextButton(
+                                      onPressed: () async {
+                                        await _bluetoothService.openBluetoothSettings();
+                                        // Re-check Bluetooth status after returning
+                                        await _checkBluetoothStatus();
+                                      },
+                                      child: Text(
+                                        'Turn On',
+                                        style: theme.textTheme.labelLarge?.copyWith(
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 3.h),
                             SizedBox(
                               width: double.infinity,
                               height: 6.h,
                               child: ElevatedButton(
                                 onPressed: _isLoading
                                     ? null
-                                    : _handleEnableBluetooth,
+                                    : _handleContinue,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: theme.colorScheme.primary,
                                   foregroundColor: theme.colorScheme.onPrimary,
@@ -306,8 +470,8 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
                                           strokeWidth: 2,
                                           valueColor:
                                               AlwaysStoppedAnimation<Color>(
-                                                theme.colorScheme.onPrimary,
-                                              ),
+                                            theme.colorScheme.onPrimary,
+                                          ),
                                         ),
                                       )
                                     : Row(
@@ -315,13 +479,17 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
                                             MainAxisAlignment.center,
                                         children: [
                                           CustomIconWidget(
-                                            iconName: 'bluetooth',
+                                            iconName: _isBluetoothOn
+                                                ? 'check'
+                                                : 'arrow_forward',
                                             color: theme.colorScheme.onPrimary,
                                             size: 20,
                                           ),
                                           SizedBox(width: 2.w),
                                           Text(
-                                            'Enable Bluetooth',
+                                            _isBluetoothOn
+                                                ? 'Continue'
+                                                : 'Continue Anyway',
                                             style: theme.textTheme.labelLarge
                                                 ?.copyWith(
                                                   color: theme
@@ -333,16 +501,16 @@ class _BluetoothOnboardingState extends State<BluetoothOnboarding>
                                       ),
                               ),
                             ),
-                            SizedBox(height: 2.h),
-                            TextButton(
-                              onPressed: _handleSkip,
-                              child: Text(
-                                'Skip for Now',
-                                style: theme.textTheme.labelLarge?.copyWith(
+                            if (!_isBluetoothOn) ...[
+                              SizedBox(height: 1.h),
+                              Text(
+                                'You can enable Bluetooth later in settings',
+                                style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
-                            ),
+                            ],
                           ],
                         )
                       : SizedBox(

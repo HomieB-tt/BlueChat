@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as flutter_blue_plus;
 import 'package:permission_handler/permission_handler.dart';
 import '../core/env.dart';
 
@@ -142,6 +143,10 @@ class BluetoothService {
   /// Get scanning state stream
   Stream<bool> get isScanning => _isScanningController.stream;
 
+  /// Get Bluetooth adapter state as a stream
+  Stream<flutter_blue_plus.BluetoothAdapterState> get bluetoothAdapterState =>
+      flutter_blue_plus.FlutterBluePlus.adapterState;
+
   /// Get currently cached discovered devices
   List<BluetoothDevice> get cachedDevices => _discoveredDevices.values.toList();
 
@@ -258,35 +263,21 @@ class BluetoothService {
   /// Returns true if Bluetooth is powered on and available
   Future<bool> isBluetoothOn() async {
     if (kIsWeb) {
+      // For web, we can't reliably detect Bluetooth state without triggering a scan
+      // The Web Bluetooth API requires explicit user permission to access Bluetooth
+      // We'll return false and let the user proceed with onboarding
+      // The actual Bluetooth functionality will work when the user runs a device scan
       return false;
     }
 
-    if (_ble == null) return false;
-
     try {
-      // Check if Bluetooth permissions are granted and Bluetooth is available
-      final hasPermissions = await checkPermissions();
-      if (!hasPermissions) return false;
-
-      // On Android, we can check via the Bluetooth adapter state
-      // For simplicity, we check if permissions are granted
-      // In a real app, you might want to use flutter_blue_plus or similar
-      // to get the actual Bluetooth state
-      if (Platform.isAndroid) {
-        final bluetoothPermission = await Permission.bluetooth.status;
-        final locationPermission = await Permission.location.status;
-        return bluetoothPermission.isGranted && locationPermission.isGranted;
-      }
-
-      if (Platform.isIOS) {
-        final bluetoothPermission = await Permission.bluetooth.status;
-        return bluetoothPermission.isGranted;
-      }
-
-      return true;
+      // Check if Bluetooth adapter is on using flutter_blue_plus
+      final bluetoothState = await flutter_blue_plus.FlutterBluePlus.adapterState.first;
+      return bluetoothState == flutter_blue_plus.BluetoothAdapterState.on;
     } catch (e) {
       debugPrint('Error checking if Bluetooth is on: $e');
-      return false;
+      // Fallback to checking permissions
+      return await checkPermissions();
     }
   }
 
